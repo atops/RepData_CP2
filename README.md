@@ -1,1 +1,1 @@
-# RepData_CP2
+# RepData_PeerAssessment2
