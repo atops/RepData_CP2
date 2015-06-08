@@ -1,3 +1,6 @@
 .Rproj.user
 .Rhistory
 .RData
+*.xlsx
+*.bz2
+*.csv
