@@ -1,0 +1,158 @@
+---
+title: "Storm Data Analysis"
+output: 
+  html_document:
+    keep_md: true
+---
+
+## Synopsis
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This analysis involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+This analysis addresses the following questions:
+1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+## Data Processing
+```{r message=FALSE, warning=FALSE}
+library(yaml)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+
+conf <- yaml.load_file("analysis.conf")
+
+if (!file.exists(conf$destfile)) {
+        download.file(url = conf$storm_url, 
+                      destfile = conf$destfile,
+                      method = "curl") 
+}
+# This takes a very long time:
+if (!exists("storm_df")) {
+        storm_df <- read.csv(conf$destfile, stringsAsFactors=FALSE) %>% 
+                tbl_df
+}
+```
+
+The EVTYPE field has a lot of freeform text and similar types
+are consolidated according to National Weather Service 
+Emergency Alert System Events. Other types of event types
+that did not fall into these categories were grouped by
+similarity using my own personal judgement.
+
+```{r message=FALSE, warning=FALSE}
+storm_df %<>% mutate(Type2 = EVTYPE)
+for (oldval in names(conf$evtype)) {
+        storm_df %<>% mutate(Type2 = ifelse(grepl(oldval, 
+                                            Type2, 
+                                            ignore.case=TRUE), 
+                                      conf$evtype[[oldval]], 
+                                      Type2)) 
+}
+```
+## Results
+
+``` {r message=FALSE, warning=FALSE}
+impact_summary <- storm_df %>% 
+        select(Type2, FATALITIES, INJURIES) %>% 
+        group_by(Type2) %>% 
+        summarize(fatal = sum(FATALITIES), injury = sum(INJURIES)) %>% 
+        arrange(desc(injury), desc(fatal)) 
+```
+
+The following plot shows injuries and fatalities by event type for the 20 evnt types with the most injuries, sorted according to the number of injuries.
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE} 
+dfp <- head(impact_summary, n=20)
+
+p1 <- ggplot(data = dfp) +
+        geom_bar(aes(reorder(Type2, injury), injury), stat = "identity") +
+        labs(title = "Injuries",
+             y = "",
+             x = "Event Type") +
+        coord_flip()
+
+p2 <- ggplot(data = dfp) +
+        geom_bar(aes(reorder(Type2, injury), fatal), stat = "identity") +
+        labs(title = "Fatalities",
+             y = "",
+             x = "") +
+        coord_flip()
+grid.arrange(p1, p2, nrow = 1)
+```
+
+The economic consequences of the storms is given in terms of total damage in US dollars, which includes property damage and crop damage.
+
+``` {r message=FALSE, warning=FALSE}
+DMGEXP <- list("K"=10^3, "M"=10^6, "B"=10^9)
+
+storm_df$PROPDMG_TOT <- mapply(function(x, y) ifelse(x %in% names(DMGEXP), 
+                                                  y * DMGEXP[[x]], y),
+                               x = storm_df$PROPDMGEXP,
+                               y = storm_df$PROPDMG)
+
+storm_df$CROPDMG_TOT <- mapply(function(x, y) ifelse(x %in% names(DMGEXP), 
+                                                  y * DMGEXP[[x]], y),
+                               x = storm_df$CROPDMGEXP,
+                               y = storm_df$CROPDMG)
+
+econ_summary <- storm_df %>% 
+        mutate(DMG_TOT = PROPDMG_TOT + CROPDMG_TOT) %>%
+        select(Type2, PROPDMG_TOT, CROPDMG_TOT, DMG_TOT) %>% 
+        group_by(Type2) %>% 
+        summarize(property = sum(PROPDMG_TOT)/10^6, 
+                  crop = sum(CROPDMG_TOT)/10^6,
+                  total = sum(DMG_TOT)/10^6) %>% 
+        arrange(desc(total)) 
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dfp <- head(econ_summary, n=20)
+
+p1 <- ggplot(data = dfp) +
+        geom_bar(aes(reorder(Type2, total), property), stat = "identity") +
+        labs(title = "Property Damage",
+             y = "$ (millions)",
+             x = "Event Type") +
+        coord_flip()
+
+p2 <- ggplot(data = dfp) +
+        geom_bar(aes(reorder(Type2, total), crop), stat = "identity") +
+        labs(title = "Crop Damage",
+             y = "$ (millions)",
+             x = "") +
+        coord_flip() +
+        scale_x_discrete(labels="")
+p3 <- ggplot(data = dfp) +
+        geom_bar(aes(reorder(Type2, total), total), stat = "identity") +
+        labs(title = "Total Damage",
+             y = "$ (millions)",
+             x = "") +
+        coord_flip() +
+        scale_x_discrete(labels="")
+grid.arrange(p1, p2, p3, nrow = 1)
+
+
+```
+```{r}
+# extract damage estmates: sentences with "damage" and "$".
+damage_records <- storm_df %>%
+        mutate(REMARKS = as.character(REMARKS)) %>% 
+        filter(grepl("Damage|damage|loss", REMARKS) & grepl("\\$", REMARKS)) %>% 
+        select(Type2, REMARKS)
+
+
+
+damage_estimates <- strsplit(damage_records$REMARKS, "\\.") %>%
+        lapply(function(x) paste0(x[grepl("\\$", x)], sep=".")) %>%
+        lapply(function(x) gsub( "\n", "", str_trim(paste(x, collapse=""))))
+
+damage_records %<>% mutate(DAMAGE=damage_estimates)
+```
+
+              
+
