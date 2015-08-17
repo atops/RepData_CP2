@@ -1,9 +1,4 @@
----
-title: "Storm Data Analysis"
-output: 
-  html_document:
-    keep_md: true
----
+# Storm Data Analysis
 
 ## Synopsis
 Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
@@ -15,7 +10,8 @@ This analysis addresses the following questions:
 2. Across the United States, which types of events have the greatest economic consequences?
 
 ## Data Processing
-```{r import and download, message=FALSE, warning=FALSE}
+
+```r
 library(yaml)
 library(dplyr)
 library(magrittr)
@@ -80,7 +76,8 @@ Emergency Alert System Events. Other types of event types
 that did not fall into these categories were grouped by
 similarity using my own personal judgement.
 
-```{r event types, message=FALSE, warning=FALSE}
+
+```r
 storm_df %<>% mutate(Type2 = EVTYPE)
 for (oldval in names(conf$evtype)) {
         storm_df %<>% mutate(Type2 = ifelse(grepl(oldval, 
@@ -92,7 +89,8 @@ for (oldval in names(conf$evtype)) {
 ```
 ## Results
 
-``` {r impact summary, message=FALSE, warning=FALSE}
+
+```r
 impact_summary <- storm_df %>% 
         filter(FATALITIES > 0 & INJURIES > 0) %>%
         select(Type2, FATALITIES, INJURIES) %>% 
@@ -103,29 +101,12 @@ impact_summary <- storm_df %>%
 
 The following plot shows injuries and fatalities by event type for the 20 evnt types with the most injuries, sorted according to the number of injuries.
 
-``` {r plot injuries, echo=FALSE, message=FALSE, warning=FALSE, fig.width=12} 
-dfp <- head(impact_summary, n=20)
-
-p1 <- ggplot(data = dfp) +
-        geom_bar(aes(reorder(Type2, injury), injury), stat = "identity") +
-        labs(title = "Injuries",
-             y = "",
-             x = "Event Type") + 
-        coord_flip()
-
-p2 <- ggplot(data = dfp) +
-        geom_bar(aes(reorder(Type2, injury), fatal), stat = "identity") +
-        labs(title = "Fatalities",
-             y = "",
-             x = "") +
-        scale_x_discrete(labels="") +
-        coord_flip()
-grid.arrange(p1, p2, nrow = 1, clip=FALSE, widths=c(1.5,1))
-```
+![](analysis_files/figure-html/plot injuries-1.png) 
 
 The economic consequences of the storms is given in terms of total damage in US dollars, which includes property damage and crop damage.
 
-``` {r economic summary, message=FALSE, warning=FALSE}
+
+```r
 DMGEXP <- list("K"=10^3, "M"=10^6, "B"=10^9)
 
 storm_df$PROPDMG_TOT <- mapply(function(x, y) ifelse(x %in% names(DMGEXP), 
@@ -151,35 +132,7 @@ econ_summary <- storm_df %>%
 
 The following plot shows property and crop damage by event type for the 20 evnt types with the most total damages, sorted according to total damages.
 
-```{r plot damage, echo=FALSE, message=FALSE, warning=FALSE, fig.width=12}
-dfp <- head(econ_summary, n=20)
-
-p1 <- ggplot(data = dfp) +
-        geom_bar(aes(reorder(Type2, total), property), stat = "identity") +
-        labs(title = "Property Damage",
-             y = "$ (millions)",
-             x = "Event Type") +
-        scale_y_continuous(labels=dollar) +
-        coord_flip()
-
-p2 <- ggplot(data = dfp) +
-        geom_bar(aes(reorder(Type2, total), crop), stat = "identity") +
-        labs(title = "Crop Damage",
-             y = "$ (millions)",
-             x = "") +
-        scale_x_discrete(labels="") +
-        scale_y_continuous(labels=dollar) +
-        coord_flip()
-p3 <- ggplot(data = dfp) +
-        geom_bar(aes(reorder(Type2, total), total), stat = "identity") +
-        labs(title = "Total Damage",
-             y = "$ (millions)",
-             x = "") +
-        scale_x_discrete(labels="") +
-        scale_y_continuous(labels=dollar) +
-        coord_flip()
-grid.arrange(p1, p2, p3, nrow = 1, clip=FALSE, widths=c(1.5, 1, 1))
-```
+![](analysis_files/figure-html/plot damage-1.png) 
 
 ## Summary
 
